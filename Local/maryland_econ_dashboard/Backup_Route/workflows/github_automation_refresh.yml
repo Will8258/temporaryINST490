@@ -1,0 +1,85 @@
+name: FRED GitHub Automation (Build CSV + Master + Docs)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 6:15 UTC on the 1st of every month (adjust if you want)
+    - cron: "15 6 1 * *"
+
+permissions:
+  contents: write   # needed to commit the refreshed data back to the repo
+
+env:
+  PYTHONUNBUFFERED: "1"
+  # Your script should read this with os.getenv("FRED_API_KEY")
+  FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+
+jobs:
+  build-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          # Fallback if no requirements.txt (keeps it simple for teammates)
+          pip install --upgrade fredapi pandas tqdm pyarrow
+
+      - name: Run data pipeline
+        # Make sure your script reads the key from env:
+        # API_KEY = os.getenv("FRED_API_KEY")
+        run: |
+          python maryland_fred_github_automation.py
+
+      - name: Generate data dictionary (optional)
+        # If you bundled this into your script, this step is a no-op.
+        # Otherwise, call the separate generator here.
+        if: hashFiles('scripts/generate_data_dictionary.py') != ''
+        run: |
+          python scripts/generate_data_dictionary.py
+
+      - name: Commit & push refreshed artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage updated CSVs / master / docs only
+          git add -A data/ docs/ || true
+          git status
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            git commit -m "ci: refresh FRED datasets & docs (${ts})"
+            git push
+          fi
+
+      - name: Upload artifacts (for quick download from the run)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maryland-datasets
+          path: |
+            data/master/*.csv
+            data/counties/*.csv
+            docs/*
+          if-no-files-found: warn

@@ -1,0 +1,13 @@
+GISJOIN,YEAR,STATE,STATEFP,STATENH,NAME,A39AA,A39AB,A39AC,A39AD,A39AE,A39AF,A39AG,A39AH,A39AI,A39AJ,A39AK,A39AL,A39AM,A39AN,A39AO,A39AP
+GIS Join Match Code,Row Source Year,NHGIS Integrated State Name,FIPS State Code,NHGIS Integrated State Code,Year-Specific Area Name,Persons: In households ~ Under 5 years,Persons: In households ~ 5 to 9 years,Persons: In households ~ 10 to 14 years,Persons: In households ~ 15 to 17 years,Persons: In households ~ 18 and 19 years,Persons: In households ~ 20 years,Persons: In households ~ 21 years,Persons: In households ~ 22 to 24 years,Persons: In households ~ 25 to 34 years,Persons: In households ~ 35 to 44 years,Persons: In households ~ 45 to 54 years,Persons: In households ~ 55 to 59 years,Persons: In households ~ 60 and 61 years,Persons: In households ~ 62 to 64 years,Persons: In households ~ 65 to 74 years,Persons: In households ~ 75 years and over
+G240,1920,Maryland,24,240,Maryland,,,,,,,,,,,,,,,,
+G240,1930,Maryland,24,240,Maryland,,,,,,,,,,,,,,,,
+G240,1940,Maryland,24,240,Maryland,,,,,,,,,,,,,,,,
+G240,1950,Maryland,24,240,Maryland,,,,,,,,,,,,,,,,
+G240,1960,Maryland,24,240,Maryland,,,,,,,,,,,,,,,,
+G240,1970,Maryland,24,240,Maryland,343196,402753,406725,218979,113625,53484,54928,185479,514866,465724,458439,175663,61054,80039,186226,96402
+G240,1980,Maryland,24,240,MARYLAND,272046,292623,355478,242312,140973,70573,70820,223935,714577,522633,443342,220900,77278,101169,242002,131886
+G240,1990,Maryland,24,240,Maryland,357231,331969,296205,172187,117522,63050,63509,215834,880416,767148,518090,200852,78431,115161,309330,180677
+G240,2000,Maryland,24,240,Maryland,352854,390826,390893,216494,114087,56344,54968,175880,730695,899255,746523,266272,85861,113826,315626,252026
+G240,2010,Maryland,24,240,Maryland,363828,366390,378312,240524,133515,68282,68372,225067,746334,783805,890872,374190,133600,181237,381162,299687
+G240,2020,Maryland,24,240,Maryland,344811,376990,400641,237053,138097,71729,72771,223710,827366,796020,780179,431833,166553,229211,579823,374932

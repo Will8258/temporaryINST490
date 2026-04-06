@@ -1,0 +1,13 @@
+GISJOIN,YEAR,STATE,STATEFP,STATENH,NAME,CQ9AA
+GIS Join Match Code,Row Source Year,NHGIS Integrated State Name,FIPS State Code,NHGIS Integrated State Code,Year-Specific Area Name,Persons: In households ~ Under 18 years
+G240,1920,Maryland,24,240,Maryland,
+G240,1930,Maryland,24,240,Maryland,
+G240,1940,Maryland,24,240,Maryland,
+G240,1950,Maryland,24,240,Maryland,
+G240,1960,Maryland,24,240,Maryland,
+G240,1970,Maryland,24,240,Maryland,1371653
+G240,1980,Maryland,24,240,MARYLAND,1162459
+G240,1990,Maryland,24,240,Maryland,1157592
+G240,2000,Maryland,24,240,Maryland,1351067
+G240,2010,Maryland,24,240,Maryland,1349054
+G240,2020,Maryland,24,240,Maryland,1359495

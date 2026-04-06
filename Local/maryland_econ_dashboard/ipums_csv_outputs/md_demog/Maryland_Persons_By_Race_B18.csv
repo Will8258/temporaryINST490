@@ -1,0 +1,13 @@
+GISJOIN,YEAR,STATE,STATEFP,STATENH,NAME,B18AA,B18AB,B18AC,B18AD,B18AE
+GIS Join Match Code,Row Source Year,NHGIS Integrated State Name,FIPS State Code,NHGIS Integrated State Code,Year-Specific Area Name,Persons: White (single race),Persons: Black or African American (single race),Persons: American Indian and Alaska Native (single race),Persons: Asian and Pacific Islander and Other Race (single race),Persons: Two or More Races
+G240,1920,Maryland,24,240,Maryland,,,,,
+G240,1930,Maryland,24,240,Maryland,,,,,
+G240,1940,Maryland,24,240,Maryland,,,,,
+G240,1950,Maryland,24,240,Maryland,,,,,
+G240,1960,Maryland,24,240,Maryland,,,,,
+G240,1970,Maryland,24,240,Maryland,3194888,699479,4239,23793,
+G240,1980,Maryland,24,240,MARYLAND,3166142,957418,9075,67949,
+G240,1990,Maryland,24,240,Maryland,3393964,1189899,12972,184633,
+G240,2000,Maryland,24,240,Maryland,3391308,1477411,15423,308757,103587
+G240,2010,Maryland,24,240,Maryland,3359284,1700298,20420,528842,164708
+G240,2020,Maryland,24,240,Maryland,3007874,1820472,31845,835132,481901

@@ -1,0 +1,13 @@
+GISJOIN,YEAR,STATE,STATEFP,STATENH,NAME,CR3AA,CR3AB
+GIS Join Match Code,Row Source Year,NHGIS Integrated State Name,FIPS State Code,NHGIS Integrated State Code,Year-Specific Area Name,Persons: In family households ~ 65 years and over,Persons: In nonfamily households ~ 65 years and over
+G240,1920,Maryland,24,240,Maryland,,
+G240,1930,Maryland,24,240,Maryland,,
+G240,1940,Maryland,24,240,Maryland,,
+G240,1950,Maryland,24,240,Maryland,,
+G240,1960,Maryland,24,240,Maryland,,
+G240,1970,Maryland,24,240,Maryland,,
+G240,1980,Maryland,24,240,MARYLAND,263899,109989
+G240,1990,Maryland,24,240,Maryland,341749,148258
+G240,2000,Maryland,24,240,Maryland,391303,176349
+G240,2010,Maryland,24,240,Maryland,468878,211971
+G240,2020,Maryland,24,240,Maryland,,

@@ -1,0 +1,13 @@
+GISJOIN,YEAR,STATE,STATEFP,STATENH,NAME,AG4AA,AG4AB,AG4AC,AG4AD,AG4AE,AG4AF,AG4AG,AG4AH,AG4AI,AG4AJ,AG4AK,AG4AL
+GIS Join Match Code,Row Source Year,NHGIS Integrated State Name,FIPS State Code,NHGIS Integrated State Code,Year-Specific Area Name,Families: Married-couple family ~ With own children under 18 years,Families: Married-couple family ~ With own children under 18 years ~ One or more under 6 years,Families: Married-couple family ~ With own children under 18 years ~ 6 to 17 years only,Families: Married-couple family ~ No own children under 18 years,"Families: Male householder, no spouse present ~ With own children under 18 years","Families: Male householder, no spouse present ~ With own children under 18 years ~ One or more under 6 years","Families: Male householder, no spouse present ~ With own children under 18 years ~ 6 to 17 years only","Families: Male householder, no spouse present ~ No own children under 18 years","Families: Female householder, no spouse present ~ With own children under 18 years","Families: Female householder, no spouse present ~ With own children under 18 years ~ One or more under 6 years","Families: Female householder, no spouse present ~ With own children under 18 years ~ 6 to 17 years only","Families: Female householder, no spouse present ~ No own children under 18 years"
+G240,1920,Maryland,24,240,Maryland,,,,,,,,,,,,
+G240,1930,Maryland,24,240,Maryland,,,,,,,,,,,,
+G240,1940,Maryland,24,240,Maryland,,,,,,,,,,,,
+G240,1950,Maryland,24,240,Maryland,,,,,,,,,,,,
+G240,1960,Maryland,24,240,Maryland,,,,,,,,,,,,
+G240,1970,Maryland,24,240,Maryland,489818,241269,248549,342951,10911,3369,7542,19339,61581,22630,38951,49543
+G240,1980,Maryland,24,240,MARYLAND,441580,180877,260703,421210,19200,6481,12719,26481,108534,32069,76465,72554
+G240,1990,Maryland,24,240,Maryland,436878,215989,220889,511685,26789,11351,15438,38573,122240,46105,76135,109649
+G240,2000,Maryland,24,240,Maryland,461446,204954,256492,533103,41384,15727,25657,43509,159342,55959,103383,120534
+G240,2010,Maryland,24,240,Maryland,439471,188825,250646,587268,47191,19288,27903,57184,164366,58517,105849,151522
+G240,2020,Maryland,24,240,Maryland,422330,181790,240540,638291,57598,22319,35279,73315,162111,56033,106078,189138

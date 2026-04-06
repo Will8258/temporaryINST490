@@ -1,0 +1,13 @@
+GISJOIN,YEAR,STATE,STATEFP,STATENH,NAME,A00AA
+GIS Join Match Code,Row Source Year,NHGIS Integrated State Name,FIPS State Code,NHGIS Integrated State Code,Year-Specific Area Name,Persons: Total
+G240,1920,Maryland,24,240,Maryland,1449661
+G240,1930,Maryland,24,240,Maryland,1631526
+G240,1940,Maryland,24,240,Maryland,1821244
+G240,1950,Maryland,24,240,Maryland,2343001
+G240,1960,Maryland,24,240,Maryland,3100689
+G240,1970,Maryland,24,240,Maryland,3922399
+G240,1980,Maryland,24,240,MARYLAND,4216975
+G240,1990,Maryland,24,240,Maryland,4781468
+G240,2000,Maryland,24,240,Maryland,5296486
+G240,2010,Maryland,24,240,Maryland,5773552
+G240,2020,Maryland,24,240,Maryland,6177224
