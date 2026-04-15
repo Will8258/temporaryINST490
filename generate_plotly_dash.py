@@ -669,40 +669,58 @@ def create_home_page():
     )
 
 
+CATEGORY_TITLES = {
+    "labor": "Maryland Labor Statistics",
+    "housing": "Maryland Housing Statistics",
+    "economy": "Maryland Economic Statistics",
+}
+
+CATEGORY_METRIC_LISTS = {
+    "labor": [
+        "Employment",
+        "Unemployment Rate",
+        "Unemployment Count",
+        "Labor Force",
+    ],
+    "housing": [
+        "New Private Housing Units by Building Permits",
+        "Housing Inventory Median Listing Price",
+        "Housing Inventory (Active Listing Count)",
+        "Zillow Home Value Index (All Homes)",
+        "All Transaction House Price Index",
+    ],
+    "economy": [
+        "Median Household Income",
+        "Gross Domestic Product (GDP)",
+        "Population Estimates",
+        "Business Openings",
+        "Per Capita Personal Income",
+    ],
+}
+
+
 def create_category_page(category: str):
-    """Create a category page with county/metric selectors and graphs."""
-    category_titles = {
-        "labor": "Maryland Labor Statistics",
-        "housing": "Maryland Housing Statistics",
-        "economy": "Maryland Economic Statistics",
-    }
-    
+    """Create a category page with a housing-style layout."""
+    title = CATEGORY_TITLES.get(category, category.title())
+    metrics = CATEGORY_METRIC_LISTS.get(category, [])
+    selected_metric = metrics[0] if metrics else title
+
     return html.Div(
-        style={
-            "maxWidth": "1200px",
-            "margin": "0 auto",
-            "padding": "20px",
-        },
+        style={"maxWidth": "1200px", "margin": "0 auto", "padding": "20px"},
         children=[
-            # Back button and page title
             html.Div(
-                style={
-                    "display": "flex",
-                    "justifyContent": "space-between",
-                    "alignItems": "center",
-                    "marginBottom": "30px",
-                },
+                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "20px"},
                 children=[
                     html.H2(
-                        category_titles.get(category, category.title()),
-                        style={"margin": "0", "color": PRIMARY_BLUE},
+                        f"{title}:",
+                        style={"margin": "0", "color": PRIMARY_BLUE, "fontSize": "28px"},
                     ),
                     dcc.Link(
                         html.Button(
                             "Back",
                             style={
-                                "padding": "8px 20px",
-                                "backgroundColor": "#333",
+                                "padding": "10px 18px",
+                                "backgroundColor": "#222",
                                 "color": "white",
                                 "border": "none",
                                 "borderRadius": "4px",
@@ -716,65 +734,113 @@ def create_category_page(category: str):
                     ),
                 ],
             ),
-
-            # Category description
-            html.P(
-                f"SELECT an indicator to view | DESELECT to browse others",
-                style={
-                    "color": "#c23030",
-                    "fontSize": "12px",
-                    "fontWeight": "600",
-                    "marginBottom": "20px",
-                },
-            ),
-
-            # County dropdown
             html.Div(
-                style={
-                    "marginBottom": "20px",
-                    "display": "flex",
-                    "gap": "40px",
-                    "alignItems": "flex-start",
-                },
+                style={"display": "flex", "gap": "14px", "marginBottom": "18px"},
                 children=[
-                    html.Div(
-                        style={"flexBasis": "300px"},
-                        children=[
-                            html.Label(
-                                "Select County:",
+                    *[
+                        dcc.Link(
+                            html.Div(
+                                CATEGORY_TITLES[item],
                                 style={
-                                    "display": "block",
-                                    "fontWeight": "600",
-                                    "marginBottom": "8px",
-                                    "color": TEXT_DARK,
+                                    "width": "100%",
+                                    "padding": "18px 16px",
+                                    "border": f"1px solid {BORDER_COLOR}",
+                                    "borderRadius": "4px",
+                                    "textAlign": "center",
+                                    "color": "white" if item == category else TEXT_DARK,
+                                    "fontWeight": "700" if item == category else "600",
+                                    "backgroundColor": "#666" if item == category else "white",
                                 },
                             ),
-                            dcc.Dropdown(
-                                id=f"{category}_county_dropdown",
-                                options=[{"label": c, "value": c} for c in COUNTY_LIST],
-                                value=COUNTY_LIST[0],
-                                clearable=False,
+                            href=f"/{item}",
+                            style={"textDecoration": "none", "flex": "1"},
+                        )
+                        for item in ["labor", "housing", "economy"]
+                    ],
+                ],
+            ),
+            html.Div(
+                style={"color": "#c23030", "fontSize": "12px", "fontWeight": "600", "marginBottom": "24px"},
+                children=[
+                    html.Span("Instructions:", style={"marginRight": "12px"}),
+                    html.Span("SELECT an indicator to view", style={"fontWeight": "700"}),
+                    html.Br(),
+                    html.Span("DESELECT to browse others", style={"fontWeight": "700"}),
+                ],
+            ),
+            html.Div(
+                style={"display": "grid", "gridTemplateColumns": "320px 1fr", "gap": "24px"},
+                children=[
+                    html.Div(
+                        style={"border": f"1px solid {BORDER_COLOR}", "borderRadius": "6px", "padding": "18px", "backgroundColor": "white"},
+                        children=[
+                            html.Div(
+                                f"{category.upper()} STATISTICS",
+                                style={"marginBottom": "18px", "fontSize": "12px", "fontWeight": "700", "letterSpacing": "1px", "textTransform": "uppercase"},
+                            ),
+                            *[
+                                html.Div(
+                                    metric,
+                                    style={
+                                        "padding": "14px 12px",
+                                        "marginBottom": "10px" if i < len(metrics) - 1 else "0",
+                                        "border": f"1px solid {BORDER_COLOR}",
+                                        "borderRadius": "4px",
+                                        "backgroundColor": "#444" if i == 0 else "#f7f9fc",
+                                        "color": "white" if i == 0 else TEXT_DARK,
+                                        "fontWeight": "700" if i == 0 else "600",
+                                    },
+                                )
+                                for i, metric in enumerate(metrics)
+                            ],
+                        ],
+                    ),
+                    html.Div(
+                        children=[
+                            html.Div(
+                                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "16px"},
+                                children=[
+                                    html.Div(
+                                        selected_metric,
+                                        style={"fontSize": "18px", "fontWeight": "600", "color": TEXT_DARK},
+                                    ),
+                                    html.Div(
+                                        style={"width": "320px"},
+                                        children=[
+                                            html.Label(
+                                                "Select County:",
+                                                style={"display": "block", "fontWeight": "600", "fontSize": "12px", "color": TEXT_DARK, "marginBottom": "8px"},
+                                            ),
+                                            dcc.Dropdown(
+                                                id=f"{category}_county_dropdown",
+                                                options=[{"label": c, "value": c} for c in COUNTY_LIST],
+                                                value=COUNTY_LIST[0],
+                                                clearable=False,
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            dcc.Loading(
+                                id=f"{category}_loading",
+                                type="circle",
+                                children=dcc.Graph(id=f"{category}_graph"),
+                                style={"minHeight": "420px"},
+                            ),
+                            html.P(
+                                id=f"{category}_data_note",
+                                style={"color": "#999", "fontSize": "12px", "marginTop": "12px"},
                             ),
                         ],
                     ),
                 ],
             ),
-
-            # Loading spinner with graph
-            dcc.Loading(
-                id=f"{category}_loading",
-                type="circle",
-                children=dcc.Graph(id=f"{category}_graph"),
-                style={"minHeight": "400px"},
-            ),
-
-            # Data source note
-            html.P(
-                id=f"{category}_data_note",
-                style={"color": "#999", "fontSize": "12px", "marginTop": "8px"},
-            ),
         ],
     )
+
+
+def create_housing_page():
+    return create_category_page("housing")
 
 
 app.layout = html.Div([
@@ -797,7 +863,7 @@ def display_page(pathname):
     if pathname == "/labor":
         return create_category_page("labor")
     elif pathname == "/housing":
-        return create_category_page("housing")
+        return create_housing_page()
     elif pathname == "/economy":
         return create_category_page("economy")
     else:
@@ -831,9 +897,10 @@ def update_labor_graph(county_pretty: str):
     Input("housing_county_dropdown", "value"),
 )
 def update_housing_graph(county_pretty: str):
-    """Update housing statistics graph."""
+    """Update housing statistics graph for the single permitted building units metric."""
     try:
         df = get_fred_data_for_county(county_pretty, "housing")
+        df = df[df["metric"] == "new_private_housing_units_by_building_permits"]
         fig = build_figure(df, county_pretty, "housing")
         note = "Data source: Federal Reserve Economic Data (FRED) | Auto-refreshes every 30 days"
         return fig, note
