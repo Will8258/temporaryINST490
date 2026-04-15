@@ -31,10 +31,11 @@ from datetime import datetime
 from pathlib import Path
 
 from fredapi import Fred
-from dash import Dash, html, dcc, Input, Output
+from dash import Dash, html, dcc, Input, Output, callback
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from flask_caching import Cache
+from urllib.parse import urljoin
 
 # Load .env file when running locally.
 # On Render, environment variables are set directly in the dashboard
@@ -307,6 +308,33 @@ def _safe_get_fred_series(series_id: str) -> pd.Series | None:
                 return None
     return None
 
+def add_population_fallback(rows, county_name):
+    """
+    Optional helper to inject population data if not present in Excel.
+    Example uses Montgomery County.
+    """
+    fallback_series = {
+        "montgomery": "MDMONT5POP",
+        "baltimore": "MDBALT5POP",
+    }
+
+    county_snake = to_snake_case(county_name)
+
+    if county_snake in fallback_series:
+        series_id = fallback_series[county_snake]
+        data = _safe_get_fred_series(series_id)
+        if data is not None and not data.empty:
+            for date, value in data.items():
+                if pd.isna(value):
+                    continue
+                rows.append({
+                    "county": county_snake,
+                    "metric": "population",
+                    "date":   pd.Timestamp(date),
+                    "value":  float(value),
+                })
+
+
 
 @cache.memoize(timeout=THIRTY_DAYS)
 def get_county_fred_data() -> pd.DataFrame:
@@ -389,6 +417,7 @@ GROUP_PATTERNS = {
     "housing": re.compile(r"house|housing|zillow|listing|building|permits", re.IGNORECASE),
     "labor":   re.compile(r"employ|labor|labour|unemployment|labor_force", re.IGNORECASE),
     "economy": re.compile(r"poverty|gdp|population|income|business|earnings|wage", re.IGNORECASE),
+    "demographics": re.compile(r"population", re.IGNORECASE),
 }
 
 def classify_metric(metric_name: str) -> str | None:
@@ -482,106 +511,367 @@ def build_figure(df: pd.DataFrame, county_name: str, group_name: str) -> go.Figu
 
 
 # ---------------------------------------- #
-# App Layout                               #
+# App Layout - Multi-Page Design           #
 # ---------------------------------------- #
 
-GROUP_OPTIONS = ["labor", "housing", "economy"]
+# Color scheme matching the image
+PRIMARY_BLUE = "#1B4A7A"
+LIGHT_BLUE = "#F0F6FB"
+BORDER_COLOR = "#1B4A7A"
+TEXT_DARK = "#333"
+TEXT_LIGHT = "#666"
 
-app.layout = html.Div(
-    style={"fontFamily": "Arial, sans-serif", "maxWidth": "1100px", "margin": "0 auto", "padding": "20px"},
-    children=[
-        html.H2("Maryland County Economic Dashboard", style={"marginBottom": "4px"}),
-        html.P(
-            "Data sourced from BLS and FRED. Refreshed automatically every 30 days.",
-            style={"color": "#666", "marginTop": "0", "marginBottom": "24px"},
-        ),
+def create_header():
+    """Create the professional header with branding."""
+    return html.Div(
+        style={
+            "backgroundColor": PRIMARY_BLUE,
+            "color": "white",
+            "padding": "20px 40px",
+            "marginBottom": "40px",
+            "display": "flex",
+            "alignItems": "center",
+            "gap": "30px",
+        },
+        children=[
+            html.Div(
+                style={
+                    "fontSize": "100px",
+                    "fontWeight": "bold",
+                    "letterSpacing": "1px",
+                    "minWidth": "60px",
+                },
+                children="NCSG",
+            ),
+            html.H1(
+                "Maryland Indicators Dashboard",
+                style={
+                    "margin": "0",
+                    "fontSize": "36px",
+                    "fontWeight": "600",
+                    "flex": "1",
+                },
+            ),
+        ],
+    )
 
-        # Dropdowns row
-        html.Div(
-            style={"display": "flex", "gap": "24px", "marginBottom": "24px"},
-            children=[
-                html.Div([
-                    html.Label("County", style={"fontWeight": "bold", "display": "block", "marginBottom": "6px"}),
-                    dcc.Dropdown(
-                        id="county_dropdown",
-                        options=[{"label": c, "value": c} for c in COUNTY_LIST],
-                        value=COUNTY_LIST[0],
-                        clearable=False,
-                        style={"width": "280px"},
+
+def create_home_page():
+    """Create the home page with category buttons."""
+    return html.Div(
+        style={
+            "maxWidth": "1000px",
+            "margin": "0 auto",
+            "padding": "20px",
+        },
+        children=[
+            html.Div(
+                style={
+                    "border": f"3px solid {BORDER_COLOR}",
+                    "borderRadius": "8px",
+                    "padding": "40px",
+                    "textAlign": "center",
+                },
+                children=[
+                    html.Div(
+                        style={
+                            "fontSize": "24px",
+                            "fontWeight": "700",
+                            "color": PRIMARY_BLUE,
+                            "marginBottom": "20px",
+                        },
+                        children="Maryland Indicators Dashboard",
                     ),
-                ]),
-                html.Div([
-                    html.Label("Metric Group", style={"fontWeight": "bold", "display": "block", "marginBottom": "6px"}),
-                    dcc.Dropdown(
-                        id="group_dropdown",
-                        options=[{"label": g.title(), "value": g} for g in GROUP_OPTIONS],
-                        value="labor",
-                        clearable=False,
-                        style={"width": "200px"},
+                    html.P(
+                        "Explore key statewide and county-level data on labor, housing, and economic conditions across Maryland "
+                        "through this interactive dashboard. All data is updated automatically from trusted public sources.",
+                        style={
+                            "fontSize": "14px",
+                            "color": TEXT_LIGHT,
+                            "lineHeight": "1.6",
+                            "marginBottom": "40px",
+                            "maxWidth": "700px",
+                            "margin": "0 auto 40px",
+                        },
                     ),
-                ]),
-            ],
-        ),
+                    html.Div(
+                        style={
+                            "display": "grid",
+                            "gridTemplateColumns": "repeat(3, 1fr)",
+                            "gap": "20px",
+                        },
+                        children=[
+                            dcc.Link(
+                                html.Div(
+                                    "Maryland Labor\nStatistics",
+                                    style={
+                                        "padding": "30px",
+                                        "border": f"2px solid {BORDER_COLOR}",
+                                        "borderRadius": "6px",
+                                        "fontSize": "16px",
+                                        "fontWeight": "600",
+                                        "color": PRIMARY_BLUE,
+                                        "textAlign": "center",
+                                        "whiteSpace": "pre-wrap",
+                                        "cursor": "pointer",
+                                        "backgroundColor": "white",
+                                        "transition": "all 0.2s",
+                                    },
+                                ),
+                                href="/labor",
+                                style={"textDecoration": "none"},
+                            ),
+                            dcc.Link(
+                                html.Div(
+                                    "Maryland Housing\nStatistics",
+                                    style={
+                                        "padding": "30px",
+                                        "border": f"2px solid {BORDER_COLOR}",
+                                        "borderRadius": "6px",
+                                        "fontSize": "16px",
+                                        "fontWeight": "600",
+                                        "color": PRIMARY_BLUE,
+                                        "textAlign": "center",
+                                        "whiteSpace": "pre-wrap",
+                                        "cursor": "pointer",
+                                        "backgroundColor": "white",
+                                        "transition": "all 0.2s",
+                                    },
+                                ),
+                                href="/housing",
+                                style={"textDecoration": "none"},
+                            ),
+                            dcc.Link(
+                                html.Div(
+                                    "Maryland Economic\nStatistics",
+                                    style={
+                                        "padding": "30px",
+                                        "border": f"2px solid {BORDER_COLOR}",
+                                        "borderRadius": "6px",
+                                        "fontSize": "16px",
+                                        "fontWeight": "600",
+                                        "color": PRIMARY_BLUE,
+                                        "textAlign": "center",
+                                        "whiteSpace": "pre-wrap",
+                                        "cursor": "pointer",
+                                        "backgroundColor": "white",
+                                        "transition": "all 0.2s",
+                                    },
+                                ),
+                                href="/economy",
+                                style={"textDecoration": "none"},
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )
 
-        # Loading spinner wraps the graph so users see feedback during API calls
-        dcc.Loading(
-            id="loading",
-            type="circle",
-            children=dcc.Graph(id="metrics_graph"),
-        ),
 
-        # Subtle data freshness note
-        html.P(
-            id="data_note",
-            style={"color": "#999", "fontSize": "12px", "marginTop": "8px"},
-        ),
-    ],
+def create_category_page(category: str):
+    """Create a category page with county/metric selectors and graphs."""
+    category_titles = {
+        "labor": "Maryland Labor Statistics",
+        "housing": "Maryland Housing Statistics",
+        "economy": "Maryland Economic Statistics",
+    }
+    
+    return html.Div(
+        style={
+            "maxWidth": "1200px",
+            "margin": "0 auto",
+            "padding": "20px",
+        },
+        children=[
+            # Back button and page title
+            html.Div(
+                style={
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "alignItems": "center",
+                    "marginBottom": "30px",
+                },
+                children=[
+                    html.H2(
+                        category_titles.get(category, category.title()),
+                        style={"margin": "0", "color": PRIMARY_BLUE},
+                    ),
+                    dcc.Link(
+                        html.Button(
+                            "Back",
+                            style={
+                                "padding": "8px 20px",
+                                "backgroundColor": "#333",
+                                "color": "white",
+                                "border": "none",
+                                "borderRadius": "4px",
+                                "cursor": "pointer",
+                                "fontSize": "14px",
+                                "fontWeight": "600",
+                            },
+                        ),
+                        href="/",
+                        style={"textDecoration": "none"},
+                    ),
+                ],
+            ),
+
+            # Category description
+            html.P(
+                f"SELECT an indicator to view | DESELECT to browse others",
+                style={
+                    "color": "#c23030",
+                    "fontSize": "12px",
+                    "fontWeight": "600",
+                    "marginBottom": "20px",
+                },
+            ),
+
+            # County dropdown
+            html.Div(
+                style={
+                    "marginBottom": "20px",
+                    "display": "flex",
+                    "gap": "40px",
+                    "alignItems": "flex-start",
+                },
+                children=[
+                    html.Div(
+                        style={"flexBasis": "300px"},
+                        children=[
+                            html.Label(
+                                "Select County:",
+                                style={
+                                    "display": "block",
+                                    "fontWeight": "600",
+                                    "marginBottom": "8px",
+                                    "color": TEXT_DARK,
+                                },
+                            ),
+                            dcc.Dropdown(
+                                id=f"{category}_county_dropdown",
+                                options=[{"label": c, "value": c} for c in COUNTY_LIST],
+                                value=COUNTY_LIST[0],
+                                clearable=False,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+
+            # Loading spinner with graph
+            dcc.Loading(
+                id=f"{category}_loading",
+                type="circle",
+                children=dcc.Graph(id=f"{category}_graph"),
+                style={"minHeight": "400px"},
+            ),
+
+            # Data source note
+            html.P(
+                id=f"{category}_data_note",
+                style={"color": "#999", "fontSize": "12px", "marginTop": "8px"},
+            ),
+        ],
+    )
+
+
+app.layout = html.Div([
+    dcc.Location(id="url", refresh=False),
+    
+    # Fixed header
+    create_header(),
+    
+    # Page content based on URL
+    html.Div(id="page-content"),
+])
+
+
+@callback(
+    Output("page-content", "children"),
+    Input("url", "pathname"),
 )
+def display_page(pathname):
+    """Route to the appropriate page based on URL."""
+    if pathname == "/labor":
+        return create_category_page("labor")
+    elif pathname == "/housing":
+        return create_category_page("housing")
+    elif pathname == "/economy":
+        return create_category_page("economy")
+    else:
+        return create_home_page()
 
 
 # ---------------------------------------- #
-# Callback                                 #
+# Callbacks for Category Pages              #
 # ---------------------------------------- #
 
-@app.callback(
-    Output("metrics_graph", "figure"),
-    Output("data_note", "children"),
-    Input("county_dropdown", "value"),
-    Input("group_dropdown", "value"),
+@callback(
+    Output("labor_graph", "figure"),
+    Output("labor_data_note", "children"),
+    Input("labor_county_dropdown", "value"),
 )
-def update_graph(county_pretty: str, group_name: str):
-    """
-    Fetch the appropriate data for the selected county and group,
-    then return a Plotly figure.
-
-    - Labor group → BLS API (cached 30 days)
-    - Housing / Economy groups → FRED API (cached 30 days)
-    """
+def update_labor_graph(county_pretty: str):
+    """Update labor statistics graph."""
     try:
-        if group_name == "labor":
-            df = get_labor_data_for_county(county_pretty)
-        else:
-            df = get_fred_data_for_county(county_pretty, group_name)
-
-        fig = build_figure(df, county_pretty, group_name)
-
-        # Show when data was last fetched (approximated)
-        note = (
-            f"Data source: {'BLS' if group_name == 'labor' else 'FRED'} | "
-            f"Auto-refreshes every 30 days"
-        )
+        df = get_labor_data_for_county(county_pretty)
+        fig = build_figure(df, county_pretty, "labor")
+        note = "Data source: U.S. Bureau of Labor Statistics (BLS) | Auto-refreshes every 30 days"
         return fig, note
-
     except Exception as e:
-        print(f"[ERROR] Failed to build figure for {county_pretty} / {group_name}: {e}")
-        empty_fig = go.Figure()
-        empty_fig.add_annotation(
-            x=0.5, y=0.5, xref="paper", yref="paper",
-            text="An error occurred loading data. Please try again shortly.",
-            showarrow=False, font=dict(size=14),
-        )
-        empty_fig.update_layout(height=300)
-        return empty_fig, "Data temporarily unavailable."
+        print(f"[ERROR] Failed to build labor figure for {county_pretty}: {e}")
+        return _error_figure(county_pretty, "labor"), "Data temporarily unavailable."
+
+
+@callback(
+    Output("housing_graph", "figure"),
+    Output("housing_data_note", "children"),
+    Input("housing_county_dropdown", "value"),
+)
+def update_housing_graph(county_pretty: str):
+    """Update housing statistics graph."""
+    try:
+        df = get_fred_data_for_county(county_pretty, "housing")
+        fig = build_figure(df, county_pretty, "housing")
+        note = "Data source: Federal Reserve Economic Data (FRED) | Auto-refreshes every 30 days"
+        return fig, note
+    except Exception as e:
+        print(f"[ERROR] Failed to build housing figure for {county_pretty}: {e}")
+        return _error_figure(county_pretty, "housing"), "Data temporarily unavailable."
+
+
+@callback(
+    Output("economy_graph", "figure"),
+    Output("economy_data_note", "children"),
+    Input("economy_county_dropdown", "value"),
+)
+def update_economy_graph(county_pretty: str):
+    """Update economy statistics graph."""
+    try:
+        df = get_fred_data_for_county(county_pretty, "economy")
+        fig = build_figure(df, county_pretty, "economy")
+        note = "Data source: Federal Reserve Economic Data (FRED) | Auto-refreshes every 30 days"
+        return fig, note
+    except Exception as e:
+        print(f"[ERROR] Failed to build economy figure for {county_pretty}: {e}")
+        return _error_figure(county_pretty, "economy"), "Data temporarily unavailable."
+
+
+def _error_figure(county_name: str, group_name: str) -> go.Figure:
+    """Create a simple error figure."""
+    fig = go.Figure()
+    fig.add_annotation(
+        x=0.5, y=0.5, xref="paper", yref="paper",
+        text=f"No {group_name.title()} data available for {county_name}.",
+        showarrow=False, font=dict(size=14),
+    )
+    fig.update_layout(
+        xaxis=dict(visible=False), yaxis=dict(visible=False),
+        height=300,
+    )
+    return fig
 
 
 # ---------------------------------------- #

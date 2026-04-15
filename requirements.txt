@@ -25,3 +25,12 @@ flask-caching
 # Loads API keys from a local .env file during development
 # Not needed on Render — Render injects env vars directly
 python-dotenv
+Dash
+html
+dcc
+Input
+Output
+State
+ctx
+ALL
+PreventUpdate
