@@ -1,19 +1,13 @@
-from dash import Dash, html, dcc, Input, Output, State, ctx
+from dash import Dash, html, dcc, Input, Output, ctx, ALL
 import plotly.graph_objects as go
-from pathlib import Path
 import requests
 import pandas as pd
 
-app = Dash(__name__)
+app = Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
 FRED_API_KEY = "9e5d944924918a26660adf4a492e447e"
-
 FORECLOSURE_API_URL = "https://opendata.maryland.gov/resource/w3bc-8mnv.json"
-
-# -------------------------
-# FRED SERIES
-# -------------------------
 
 LABOR_SERIES = {
     "Unemployment Rate": "Unemployment Rate in Maryland",
@@ -32,6 +26,7 @@ HOUSING_SERIES = {
     "Housing Inventory Active Listing Count": "Housing Inventory: Active Listing Count in Maryland",
     "Zillow Home Value Index": "Zillow Home Value Index (ZHVI) for All Homes Including Single-Family Residences, Condos, and CO-OPs in Maryland",
     "All Transaction House Price Index": "All-Transactions House Price Index for Maryland",
+    "Foreclosures": "foreclosures",
 }
 
 ECONOMIC_SERIES = {
@@ -42,10 +37,21 @@ ECONOMIC_SERIES = {
     "Business Applications EIN Filings": "BABATOTALSAMD",
 }
 
+CATEGORIES = {
+    "labor": {
+        "title": "MARYLAND LABOR STATISTICS:",
+        "buttons": list(LABOR_SERIES.keys())
+    },
+    "housing": {
+        "title": "MARYLAND HOUSING STATISTICS:",
+        "buttons": list(HOUSING_SERIES.keys())
+    },
+    "economic": {
+        "title": "MARYLAND ECONOMIC STATISTICS:",
+        "buttons": list(ECONOMIC_SERIES.keys())
+    }
+}
 
-# -------------------------
-# DATA HELPERS
-# -------------------------
 
 def fred_search_series_id(title):
     url = "https://api.stlouisfed.org/fred/series/search"
@@ -83,10 +89,10 @@ def fetch_fred(series_id):
 
     df = pd.DataFrame(res.json()["observations"])
     df = df[df["value"] != "."].copy()
-    df["date"] = pd.to_datetime(df["date"])
-    df["value"] = pd.to_numeric(df["value"])
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["value"] = pd.to_numeric(df["value"], errors="coerce")
 
-    return df[["date", "value"]].sort_values("date")
+    return df[["date", "value"]].dropna().sort_values("date")
 
 
 def fetch_foreclosures():
@@ -95,7 +101,8 @@ def fetch_foreclosures():
     res.raise_for_status()
 
     df = pd.DataFrame(res.json())
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df = df.dropna(subset=["date"])
 
     ignored = {"date", "type", ":id", ":created_at", ":updated_at", ":version"}
     county_cols = [c for c in df.columns if c not in ignored]
@@ -105,12 +112,8 @@ def fetch_foreclosures():
 
     df["statewide_total"] = df[county_cols].sum(axis=1)
 
-    return df[["date", "type", "statewide_total"]]
+    return df[["date", "type", "statewide_total"]].sort_values("date")
 
-
-# -------------------------
-# CHART FUNCTIONS
-# -------------------------
 
 def line_chart(title, df, y_title):
     fig = go.Figure()
@@ -142,10 +145,7 @@ def bar_chart(title, df, y_title):
     fig.add_trace(go.Bar(
         x=df["date"],
         y=df["value"],
-        marker=dict(
-            color="#2f568d",
-            line=dict(color="black", width=0.3)
-        ),
+        marker=dict(color="#2f568d", line=dict(color="black", width=0.3)),
         name=title
     ))
 
@@ -179,10 +179,7 @@ def unemployment_claims_chart(df):
         template="plotly_white",
         height=500,
         margin=dict(l=70, r=30, t=70, b=60),
-        xaxis=dict(
-            rangeslider=dict(visible=True),
-            type="date"
-        )
+        xaxis=dict(rangeslider=dict(visible=True), type="date")
     )
 
     return fig
@@ -214,79 +211,72 @@ def foreclosure_chart():
     return fig
 
 
-def get_real_chart(category, subcategory):
-    if category == "labor":
-        title = LABOR_SERIES[subcategory]
-        series_id = fred_search_series_id(title)
-        df = fetch_fred(series_id)
+def empty_chart(message="Select an indicator"):
+    fig = go.Figure()
+    fig.update_layout(
+        title=message,
+        template="plotly_white",
+        height=500
+    )
+    return fig
 
-        if subcategory == "Initial Claims":
-            return unemployment_claims_chart(df)
-        elif subcategory in ["Unemployment Rate", "Labor Force Participation Rate"]:
-            return line_chart(subcategory, df, "Percent")
-        elif subcategory == "Average Hourly Earnings":
-            return line_chart(subcategory, df, "Dollars per Hour")
-        else:
+
+def get_real_chart(category, subcategory):
+    try:
+        if category == "labor":
+            title = LABOR_SERIES[subcategory]
+            series_id = fred_search_series_id(title)
+            df = fetch_fred(series_id)
+
+            if subcategory == "Initial Claims":
+                return unemployment_claims_chart(df)
+            if subcategory in ["Unemployment Rate", "Labor Force Participation Rate"]:
+                return line_chart(subcategory, df, "Percent")
+            if subcategory == "Average Hourly Earnings":
+                return line_chart(subcategory, df, "Dollars per Hour")
             return line_chart(subcategory, df, "Persons")
 
-    if category == "housing":
-        if subcategory == "Foreclosures":
-            return foreclosure_chart()
+        if category == "housing":
+            if subcategory == "Foreclosures":
+                return foreclosure_chart()
 
-        title = HOUSING_SERIES[subcategory]
-        series_id = fred_search_series_id(title)
-        df = fetch_fred(series_id)
+            title = HOUSING_SERIES[subcategory]
+            series_id = fred_search_series_id(title)
+            df = fetch_fred(series_id)
 
-        if subcategory in [
-            "New Private Housing Units by Building Permits",
-            "Housing Inventory Active Listing Count"
-        ]:
-            return bar_chart(subcategory, df, "Count")
+            if subcategory in [
+                "New Private Housing Units by Building Permits",
+                "Housing Inventory Active Listing Count"
+            ]:
+                return bar_chart(subcategory, df, "Count")
 
-        if subcategory in [
-            "Housing Inventory Median Listing Price",
-            "Zillow Home Value Index"
-        ]:
-            return line_chart(subcategory, df, "Dollars")
+            if subcategory in [
+                "Housing Inventory Median Listing Price",
+                "Zillow Home Value Index"
+            ]:
+                return line_chart(subcategory, df, "Dollars")
 
-        return line_chart(subcategory, df, "Index")
+            return line_chart(subcategory, df, "Index")
 
-    if category == "economic":
-        series_id = ECONOMIC_SERIES[subcategory]
-        df = fetch_fred(series_id)
+        if category == "economic":
+            series_id = ECONOMIC_SERIES[subcategory]
+            df = fetch_fred(series_id)
 
-        if subcategory == "Real GDP":
-            return line_chart(subcategory, df, "Millions of Chained Dollars")
-        if subcategory == "Resident Population":
-            return line_chart(subcategory, df, "Thousands of Persons")
-        if subcategory == "Real Median Income":
-            return line_chart(subcategory, df, "Dollars")
-        if subcategory == "Poverty Rate":
-            return line_chart(subcategory, df, "Percent")
-        if subcategory == "Business Applications EIN Filings":
-            return bar_chart(subcategory, df, "Applications")
+            if subcategory == "Real GDP":
+                return line_chart(subcategory, df, "Millions of Chained Dollars")
+            if subcategory == "Resident Population":
+                return line_chart(subcategory, df, "Thousands of Persons")
+            if subcategory == "Real Median Income":
+                return line_chart(subcategory, df, "Dollars")
+            if subcategory == "Poverty Rate":
+                return line_chart(subcategory, df, "Percent")
+            if subcategory == "Business Applications EIN Filings":
+                return bar_chart(subcategory, df, "Applications")
 
-    return go.Figure()
+    except Exception as e:
+        return empty_chart(f"Error loading chart: {e}")
 
-
-# -------------------------
-# UI
-# -------------------------
-
-CATEGORIES = {
-    "labor": {
-        "title": "MARYLAND LABOR STATISTICS:",
-        "buttons": list(LABOR_SERIES.keys())
-    },
-    "housing": {
-        "title": "MARYLAND HOUSING STATISTICS:",
-        "buttons": list(HOUSING_SERIES.keys()) + ["Foreclosures"]
-    },
-    "economic": {
-        "title": "MARYLAND ECONOMIC STATISTICS:",
-        "buttons": list(ECONOMIC_SERIES.keys())
-    }
-}
+    return empty_chart()
 
 
 def category_button(label, category):
@@ -306,7 +296,7 @@ def category_button(label, category):
     )
 
 
-def sub_button(label):
+def sub_button(label, selected=False):
     return html.Button(
         label,
         id={"type": "sub-btn", "name": label},
@@ -316,7 +306,8 @@ def sub_button(label):
             "padding": "12px",
             "marginBottom": "8px",
             "fontWeight": "bold",
-            "backgroundColor": "white",
+            "backgroundColor": "#8f8f8f" if selected else "white",
+            "color": "black",
             "border": "1px solid #444",
             "cursor": "pointer"
         }
@@ -349,6 +340,25 @@ app.layout = html.Div([
         "alignItems": "center",
         "padding": "0 40px"
     }),
+
+    html.Button(
+        "Back",
+        id="back-btn",
+        n_clicks=0,
+        style={
+            "display": "none",
+            "position": "absolute",
+            "right": "90px",
+            "top": "185px",
+            "backgroundColor": "#222",
+            "color": "white",
+            "padding": "10px 28px",
+            "border": "none",
+            "fontWeight": "bold",
+            "cursor": "pointer",
+            "zIndex": "10"
+        }
+    ),
 
     html.Div(id="page-content", style={"padding": "30px 70px"})
 ], style={
@@ -404,7 +414,11 @@ def render_page(category, subcategory):
         ])
 
     info = CATEGORIES[category]
-    default_subcategory = subcategory or info["buttons"][0]
+
+    if subcategory not in info["buttons"]:
+        selected = info["buttons"][0]
+    else:
+        selected = subcategory
 
     return html.Div([
         html.Div([
@@ -412,23 +426,6 @@ def render_page(category, subcategory):
                 "textDecoration": "underline",
                 "marginBottom": "20px"
             }),
-
-            html.Button(
-                "Back",
-                id="back-btn",
-                n_clicks=0,
-                style={
-                    "position": "absolute",
-                    "right": "25px",
-                    "top": "25px",
-                    "backgroundColor": "#222",
-                    "color": "white",
-                    "padding": "10px 28px",
-                    "border": "none",
-                    "fontWeight": "bold",
-                    "cursor": "pointer"
-                }
-            ),
 
             html.Div([
                 category_button("Maryland Labor Statistics", "labor"),
@@ -443,7 +440,7 @@ def render_page(category, subcategory):
             html.Div([
                 html.Div([
                     html.H5(info["title"].replace("MARYLAND ", "").replace(":", "")),
-                    *[sub_button(label) for label in info["buttons"]]
+                    *[sub_button(label, selected=(label == selected)) for label in info["buttons"]]
                 ], style={
                     "width": "310px",
                     "paddingRight": "25px"
@@ -462,7 +459,7 @@ def render_page(category, subcategory):
                     dcc.Loading(
                         dcc.Graph(
                             id="main-chart",
-                            figure=get_real_chart(category, default_subcategory),
+                            figure=get_real_chart(category, selected),
                             style={"height": "520px"}
                         )
                     )
@@ -482,13 +479,11 @@ def render_page(category, subcategory):
 @app.callback(
     Output("selected-category", "data"),
     Output("selected-subcategory", "data", allow_duplicate=True),
-    Input({"type": "category-btn", "category": "labor"}, "n_clicks"),
-    Input({"type": "category-btn", "category": "housing"}, "n_clicks"),
-    Input({"type": "category-btn", "category": "economic"}, "n_clicks"),
+    Input({"type": "category-btn", "category": ALL}, "n_clicks"),
     Input("back-btn", "n_clicks"),
     prevent_initial_call=True
 )
-def update_category(labor, housing, economic, back):
+def update_category(_, back):
     if ctx.triggered_id == "back-btn":
         return None, None
 
@@ -500,32 +495,36 @@ def update_category(labor, housing, economic, back):
 
 @app.callback(
     Output("selected-subcategory", "data"),
-    Input({"type": "sub-btn", "name": "Unemployment Rate"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Unemployed Persons"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Labor Force Participation Rate"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Employment"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Initial Claims"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Civilian Labor Force"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Discouraged Workers"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Average Hourly Earnings"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "New Private Housing Units by Building Permits"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Housing Inventory Median Listing Price"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Housing Inventory Active Listing Count"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Zillow Home Value Index"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "All Transaction House Price Index"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Foreclosures"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Real GDP"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Resident Population"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Real Median Income"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Poverty Rate"}, "n_clicks"),
-    Input({"type": "sub-btn", "name": "Business Applications EIN Filings"}, "n_clicks"),
+    Input({"type": "sub-btn", "name": ALL}, "n_clicks"),
     prevent_initial_call=True
 )
-def update_subcategory(*_):
+def update_subcategory(_):
     if isinstance(ctx.triggered_id, dict):
         return ctx.triggered_id["name"]
 
     return None
+
+
+@app.callback(
+    Output("back-btn", "style"),
+    Input("selected-category", "data")
+)
+def toggle_back_button(category):
+    style = {
+        "position": "absolute",
+        "right": "90px",
+        "top": "185px",
+        "backgroundColor": "#222",
+        "color": "white",
+        "padding": "10px 28px",
+        "border": "none",
+        "fontWeight": "bold",
+        "cursor": "pointer",
+        "zIndex": "10"
+    }
+
+    style["display"] = "none" if category is None else "block"
+    return style
 
 
 if __name__ == "__main__":
