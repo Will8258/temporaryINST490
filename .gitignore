@@ -13,7 +13,7 @@ plotly_outputs/*
 
 # --- Jupyter Notebooks & Checkpoints ---
 .ipynb_checkpoints/
-*.ipynb
+
 
 # --- OS & IDE Files ---
 .DS_Store
