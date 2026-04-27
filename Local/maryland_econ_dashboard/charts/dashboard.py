@@ -250,16 +250,14 @@ def fetch_bls_series(series_id):
 
 def fetch_county_census_economic(county, metric):
     county_fips = COUNTY_FIPS[county]
-
     rows = []
+
     current_year = datetime.now().year
-    years = list(range(current_year - 10, current_year))
+    years = list(range(current_year - 12, current_year))
 
     variable_map = {
         "Resident Population": "B01003_001E",
         "Median Household Income": "B19013_001E",
-        "Poverty Numerator": "B17001_002E",
-        "Poverty Denominator": "B17001_001E"
     }
 
     for year in years:
@@ -285,22 +283,32 @@ def fetch_county_census_economic(county, metric):
                 continue
 
             data = res.json()
+
+            if len(data) < 2:
+                continue
+
             header = data[0]
             values = data[1]
             row = dict(zip(header, values))
 
             if metric == "Poverty Rate":
-                below = float(row["B17001_002E"])
-                total = float(row["B17001_001E"])
-                value = (below / total) * 100 if total else None
-            else:
-                value = float(row[variable_map[metric]])
+                below = pd.to_numeric(row.get("B17001_002E"), errors="coerce")
+                total = pd.to_numeric(row.get("B17001_001E"), errors="coerce")
 
-            if value is not None:
-                rows.append({
-                    "date": pd.Timestamp(year=year, month=1, day=1),
-                    "value": value
-                })
+                if pd.isna(below) or pd.isna(total) or total == 0:
+                    continue
+
+                value = (below / total) * 100
+            else:
+                value = pd.to_numeric(row.get(variable_map[metric]), errors="coerce")
+
+                if pd.isna(value):
+                    continue
+
+            rows.append({
+                "date": pd.Timestamp(year=year, month=1, day=1),
+                "value": float(value)
+            })
 
         except Exception:
             continue
@@ -373,9 +381,27 @@ def county_foreclosure_chart(county, metric):
     county_col = find_foreclosure_county_column(df, county)
 
     df[county_col] = pd.to_numeric(df[county_col], errors="coerce").fillna(0)
-    df_m = df[df["type"] == metric].sort_values("date")
+
+    # Match foreclosure type flexibly
+    metric_clean = metric.lower().strip()
+
+    if metric_clean == "notice of intent":
+        df_m = df[df["type"].str.lower().str.contains("intent", na=False)]
+    elif metric_clean == "notice of foreclosure":
+        df_m = df[df["type"].str.lower().str.contains("foreclosure", na=False)]
+        df_m = df_m[~df_m["type"].str.lower().str.contains("property", na=False)]
+    elif metric_clean == "foreclosure property registration":
+        df_m = df[df["type"].str.lower().str.contains("property", na=False)]
+    else:
+        df_m = df[df["type"].str.lower() == metric_clean]
+
+    df_m = df_m.sort_values("date")
+
+    if df_m.empty:
+        return empty_chart(f"No foreclosure data found for {county} — {metric}")
 
     fig = go.Figure()
+
     fig.add_trace(go.Scatter(
         x=df_m["date"],
         y=df_m[county_col],
@@ -509,6 +535,29 @@ def county_location_name(county):
 
     return f"{county} County, MD"
 
+def get_county_economic_fred_titles(county, metric):
+    place = county_location_name(county)
+
+    if metric == "Resident Population":
+        return [
+            f"Resident Population in {place}",
+            f"Population Estimate, Total for {place}"
+        ]
+
+    if metric == "Median Household Income":
+        return [
+            f"Estimate of Median Household Income for {place}",
+            f"Median Household Income in {place}"
+        ]
+
+    if metric == "Poverty Rate":
+        return [
+            f"Estimated Percent of People of All Ages in Poverty for {place}",
+            f"Percent of Population Below the Poverty Level in {place}"
+        ]
+
+    return []
+
 
 def get_county_fred_title(county, section, metric):
     place = county_location_name(county)
@@ -540,7 +589,7 @@ def get_county_chart(county, section, metric):
             series_id = fred_search_series_id(title)
             df = fetch_fred(series_id)
 
-            if metric in ["Median Listing Price"]:
+            if metric == "Median Listing Price":
                 return line_chart(f"{county} County — {metric}", df, "Dollars")
 
             return line_chart(f"{county} County — {metric}", df, "Count")
