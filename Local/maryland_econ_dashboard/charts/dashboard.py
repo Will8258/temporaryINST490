@@ -1,4 +1,4 @@
-from dash import Dash, html, dcc, Input, Output, ctx, ALL
+from dash import Dash, html, dcc, Input, Output, ctx, ALL, no_update
 import plotly.graph_objects as go
 import requests
 import pandas as pd
@@ -38,18 +38,9 @@ ECONOMIC_SERIES = {
 }
 
 CATEGORIES = {
-    "labor": {
-        "title": "MARYLAND LABOR STATISTICS:",
-        "buttons": list(LABOR_SERIES.keys())
-    },
-    "housing": {
-        "title": "MARYLAND HOUSING STATISTICS:",
-        "buttons": list(HOUSING_SERIES.keys())
-    },
-    "economic": {
-        "title": "MARYLAND ECONOMIC STATISTICS:",
-        "buttons": list(ECONOMIC_SERIES.keys())
-    }
+    "labor": {"title": "MARYLAND LABOR STATISTICS:", "buttons": list(LABOR_SERIES.keys())},
+    "housing": {"title": "MARYLAND HOUSING STATISTICS:", "buttons": list(HOUSING_SERIES.keys())},
+    "economic": {"title": "MARYLAND ECONOMIC STATISTICS:", "buttons": list(ECONOMIC_SERIES.keys())},
 }
 
 
@@ -117,7 +108,6 @@ def fetch_foreclosures():
 
 def line_chart(title, df, y_title):
     fig = go.Figure()
-
     fig.add_trace(go.Scatter(
         x=df["date"],
         y=df["value"],
@@ -135,13 +125,11 @@ def line_chart(title, df, y_title):
         height=500,
         margin=dict(l=70, r=30, t=70, b=60)
     )
-
     return fig
 
 
 def bar_chart(title, df, y_title):
     fig = go.Figure()
-
     fig.add_trace(go.Bar(
         x=df["date"],
         y=df["value"],
@@ -157,13 +145,11 @@ def bar_chart(title, df, y_title):
         height=500,
         margin=dict(l=70, r=30, t=70, b=60)
     )
-
     return fig
 
 
 def unemployment_claims_chart(df):
     fig = go.Figure()
-
     fig.add_trace(go.Scatter(
         x=df["date"],
         y=df["value"],
@@ -181,7 +167,6 @@ def unemployment_claims_chart(df):
         margin=dict(l=70, r=30, t=70, b=60),
         xaxis=dict(rangeslider=dict(visible=True), type="date")
     )
-
     return fig
 
 
@@ -191,7 +176,6 @@ def foreclosure_chart():
 
     for t in sorted(df["type"].dropna().unique()):
         df_t = df[df["type"] == t].sort_values("date")
-
         fig.add_trace(go.Scatter(
             x=df_t["date"],
             y=df_t["statewide_total"],
@@ -207,17 +191,12 @@ def foreclosure_chart():
         height=500,
         margin=dict(l=70, r=30, t=70, b=60)
     )
-
     return fig
 
 
 def empty_chart(message="Select an indicator"):
     fig = go.Figure()
-    fig.update_layout(
-        title=message,
-        template="plotly_white",
-        height=500
-    )
+    fig.update_layout(title=message, template="plotly_white", height=500)
     return fig
 
 
@@ -279,7 +258,7 @@ def get_real_chart(category, subcategory):
     return empty_chart()
 
 
-def category_button(label, category):
+def category_button(label, category, selected=False):
     return html.Button(
         label,
         id={"type": "category-btn", "category": category},
@@ -289,7 +268,7 @@ def category_button(label, category):
             "height": "75px",
             "margin": "12px",
             "fontWeight": "bold",
-            "backgroundColor": "white",
+            "backgroundColor": "#8f8f8f" if selected else "white",
             "border": "1px solid #444",
             "cursor": "pointer"
         }
@@ -428,9 +407,9 @@ def render_page(category, subcategory):
             }),
 
             html.Div([
-                category_button("Maryland Labor Statistics", "labor"),
-                category_button("Maryland Housing Statistics", "housing"),
-                category_button("Maryland Economic Statistics", "economic")
+                category_button("Maryland Labor Statistics", "labor", selected=(category == "labor")),
+                category_button("Maryland Housing Statistics", "housing", selected=(category == "housing")),
+                category_button("Maryland Economic Statistics", "economic", selected=(category == "economic"))
             ], style={
                 "display": "flex",
                 "justifyContent": "center",
@@ -483,14 +462,21 @@ def render_page(category, subcategory):
     Input("back-btn", "n_clicks"),
     prevent_initial_call=True
 )
-def update_category(_, back):
-    if ctx.triggered_id == "back-btn":
-        return None, None
+def update_category(category_clicks, back_clicks):
+    triggered = ctx.triggered_id
 
-    if isinstance(ctx.triggered_id, dict):
-        return ctx.triggered_id["category"], None
+    if triggered == "back-btn":
+        if back_clicks and back_clicks > 0:
+            return None, None
+        return no_update, no_update
 
-    return None, None
+    if isinstance(triggered, dict):
+        if not category_clicks or max(category_clicks) == 0:
+            return no_update, no_update
+
+        return triggered["category"], None
+
+    return no_update, no_update
 
 
 @app.callback(
@@ -498,11 +484,14 @@ def update_category(_, back):
     Input({"type": "sub-btn", "name": ALL}, "n_clicks"),
     prevent_initial_call=True
 )
-def update_subcategory(_):
+def update_subcategory(sub_clicks):
+    if not sub_clicks or max(sub_clicks) == 0:
+        return no_update
+
     if isinstance(ctx.triggered_id, dict):
         return ctx.triggered_id["name"]
 
-    return None
+    return no_update
 
 
 @app.callback(
