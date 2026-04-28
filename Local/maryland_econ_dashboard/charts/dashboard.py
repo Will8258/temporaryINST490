@@ -8,6 +8,11 @@ from datetime import datetime
 app = Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
+@server.after_request
+def allow_iframe(response):
+    response.headers.pop("X-Frame-Options", None)
+    response.headers["Content-Security-Policy"] = "frame-ancestors *"
+    return response
 # -------------------------
 # API CONFIG
 # -------------------------
