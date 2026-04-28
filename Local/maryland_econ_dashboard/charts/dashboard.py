@@ -8,16 +8,22 @@ from datetime import datetime
 app = Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
+# -------------------------
+# API CONFIG
+# -------------------------
 FRED_API_KEY = os.getenv("FRED_API_KEY", "9e5d944924918a26660adf4a492e447e")
 BLS_API_KEY = os.getenv("BLS_API_KEY", "6ce4168cdb20494a8ce7fc2f05baf9bc")
-CENSUS_API_KEY = os.getenv("CENSUS_API_KEY", "59cba10d8a5da536fc06b59dd2d629f2506a477bb122e829694aae00")
+CENSUS_API_KEY = os.getenv("CENSUS_API_KEY", "")
 
+BLS_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
+FRED_SEARCH_URL = "https://api.stlouisfed.org/fred/series/search"
+FRED_OBSERVATIONS_URL = "https://api.stlouisfed.org/fred/series/observations"
+SAIPE_API_URL = "https://api.census.gov/data/timeseries/poverty/saipe"
 FORECLOSURE_API_URL = "https://opendata.maryland.gov/resource/w3bc-8mnv.json"
 
 # -------------------------
 # STATEWIDE SERIES
 # -------------------------
-
 LABOR_SERIES = {
     "Unemployment Rate": "Unemployment Rate in Maryland",
     "Unemployed Persons": "Unemployed Persons in Maryland",
@@ -49,13 +55,12 @@ ECONOMIC_SERIES = {
 # -------------------------
 # COUNTY CONFIG
 # -------------------------
-
 COUNTIES = [
     "Allegany", "Anne Arundel", "Baltimore", "Baltimore City",
     "Calvert", "Caroline", "Carroll", "Cecil", "Charles",
     "Dorchester", "Frederick", "Garrett", "Harford",
     "Howard", "Kent", "Montgomery", "Prince George's",
-    "Queen Anne's", "Somerset", "St. Mary's",
+    "Queen Anne's", "St. Mary's", "Somerset",
     "Talbot", "Washington", "Wicomico", "Worcester"
 ]
 
@@ -99,8 +104,9 @@ COUNTY_METRICS = {
         "Building Permits"
     ],
     "Economic": [
-        "Resident Population",
         "Median Household Income",
+        "People in Poverty",
+        "Poverty Universe",
         "Poverty Rate"
     ],
     "Foreclosures": [
@@ -128,9 +134,7 @@ CATEGORIES = {
 # -------------------------
 # FRED HELPERS
 # -------------------------
-
 def fred_search_series_id(title):
-    url = "https://api.stlouisfed.org/fred/series/search"
     params = {
         "search_text": title,
         "api_key": FRED_API_KEY,
@@ -138,7 +142,7 @@ def fred_search_series_id(title):
         "limit": 10
     }
 
-    res = requests.get(url, params=params, timeout=30)
+    res = requests.get(FRED_SEARCH_URL, params=params, timeout=30)
     res.raise_for_status()
     results = res.json().get("seriess", [])
 
@@ -153,14 +157,13 @@ def fred_search_series_id(title):
 
 
 def fetch_fred(series_id):
-    url = "https://api.stlouisfed.org/fred/series/observations"
     params = {
         "series_id": series_id,
         "api_key": FRED_API_KEY,
         "file_type": "json"
     }
 
-    res = requests.get(url, params=params, timeout=30)
+    res = requests.get(FRED_OBSERVATIONS_URL, params=params, timeout=30)
     res.raise_for_status()
 
     df = pd.DataFrame(res.json()["observations"])
@@ -174,7 +177,6 @@ def fetch_fred(series_id):
 # -------------------------
 # BLS COUNTY LABOR
 # -------------------------
-
 def bls_county_series_id(county, metric):
     fips = "24" + COUNTY_FIPS[county]
 
@@ -185,16 +187,13 @@ def bls_county_series_id(county, metric):
         "Civilian Labor Force": "06"
     }
 
-    measure = measure_codes[metric]
-
-    return f"LAUCN{fips}00000000{measure}"
+    return f"LAUCN{fips}00000000{measure_codes[metric]}"
 
 
 def fetch_bls_series(series_id):
     current_year = datetime.now().year
     start_year = current_year - 10
 
-    url = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
     payload = {
         "seriesid": [series_id],
         "startyear": str(start_year),
@@ -204,7 +203,7 @@ def fetch_bls_series(series_id):
     if BLS_API_KEY:
         payload["registrationkey"] = BLS_API_KEY
 
-    res = requests.post(url, json=payload, timeout=30)
+    res = requests.post(BLS_API_URL, json=payload, timeout=30)
     res.raise_for_status()
     data = res.json()
 
@@ -219,7 +218,6 @@ def fetch_bls_series(series_id):
         if not period or not period.startswith("M") or period == "M13":
             continue
 
-        # Skip blanks, dashes, suppressed values
         if raw_value in ["", "-", ".", None]:
             continue
 
@@ -245,86 +243,88 @@ def fetch_bls_series(series_id):
 
 
 # -------------------------
-# CENSUS COUNTY ECONOMIC
+# SAIPE COUNTY ECONOMIC
 # -------------------------
-
-def fetch_county_census_economic(county, metric):
+def fetch_county_saipe(county, metric):
     county_fips = COUNTY_FIPS[county]
     rows = []
 
-    current_year = datetime.now().year
-    years = list(range(current_year - 12, current_year))
+    # SAIPE confirmed variables:
+    # SAEPOVALL_PT = all ages poverty count
+    # SAEPOVRTALL_PT = all ages poverty rate
+    # SAEMHI_PT = median household income
+    # SAEPOVU_ALL = all ages poverty universe
+    for year in range(2015, 2025):
+        params = {
+            "get": "NAME,YEAR,SAEPOVALL_PT,SAEPOVRTALL_PT,SAEMHI_PT,SAEPOVU_ALL",
+            "for": f"county:{county_fips}",
+            "in": "state:24",
+            "time": str(year)
+        }
 
-    variable_map = {
-        "Resident Population": "B01003_001E",
-        "Median Household Income": "B19013_001E",
-    }
+        if CENSUS_API_KEY:
+            params["key"] = CENSUS_API_KEY
 
-    for year in years:
-        try:
-            if metric == "Poverty Rate":
-                get_vars = "NAME,B17001_002E,B17001_001E"
-            else:
-                get_vars = f"NAME,{variable_map[metric]}"
+        res = requests.get(SAIPE_API_URL, params=params, timeout=30)
 
-            url = f"https://api.census.gov/data/{year}/acs/acs5"
-            params = {
-                "get": get_vars,
-                "for": f"county:{county_fips}",
-                "in": "state:24"
-            }
-
-            if CENSUS_API_KEY:
-                params["key"] = CENSUS_API_KEY
-
-            res = requests.get(url, params=params, timeout=30)
-
-            if res.status_code != 200:
-                continue
-
-            data = res.json()
-
-            if len(data) < 2:
-                continue
-
-            header = data[0]
-            values = data[1]
-            row = dict(zip(header, values))
-
-            if metric == "Poverty Rate":
-                below = pd.to_numeric(row.get("B17001_002E"), errors="coerce")
-                total = pd.to_numeric(row.get("B17001_001E"), errors="coerce")
-
-                if pd.isna(below) or pd.isna(total) or total == 0:
-                    continue
-
-                value = (below / total) * 100
-            else:
-                value = pd.to_numeric(row.get(variable_map[metric]), errors="coerce")
-
-                if pd.isna(value):
-                    continue
-
-            rows.append({
-                "date": pd.Timestamp(year=year, month=1, day=1),
-                "value": float(value)
-            })
-
-        except Exception:
+        if res.status_code != 200:
+            print("SAIPE failed:", res.url)
+            print(res.status_code, res.text[:300])
             continue
+
+        try:
+            data = res.json()
+        except Exception:
+            print("SAIPE non-JSON:", res.url)
+            print(res.text[:300])
+            continue
+
+        if len(data) < 2:
+            print("SAIPE empty:", res.url)
+            continue
+
+        header = data[0]
+        value_row = data[1]
+        row = dict(zip(header, value_row))
+
+        if metric == "People in Poverty":
+            value = pd.to_numeric(row.get("SAEPOVALL_PT"), errors="coerce")
+            y_label = "People"
+
+        elif metric == "Poverty Universe":
+            value = pd.to_numeric(row.get("SAEPOVU_ALL"), errors="coerce")
+            y_label = "People"
+
+        elif metric == "Median Household Income":
+            value = pd.to_numeric(row.get("SAEMHI_PT"), errors="coerce")
+            y_label = "Dollars"
+
+        elif metric == "Poverty Rate":
+            value = pd.to_numeric(row.get("SAEPOVRTALL_PT"), errors="coerce")
+            y_label = "Percent"
+
+        else:
+            raise ValueError(f"Invalid SAIPE metric: {metric}")
+
+        if pd.isna(value):
+            print("SAIPE missing value:", year, county, metric, row)
+            continue
+
+        rows.append({
+            "date": pd.Timestamp(year=year, month=1, day=1),
+            "value": float(value)
+        })
 
     df = pd.DataFrame(rows)
 
     if df.empty:
-        raise ValueError(f"No Census data found for {county} {metric}")
+        raise ValueError(f"No usable SAIPE data found for {county} {metric}")
 
-    return df.sort_values("date")
-
+    return df[["date", "value"]].sort_values("date"), y_label
 
 # -------------------------
 # MARYLAND OPEN DATA FORECLOSURES
 # -------------------------
-
 def fetch_foreclosures_raw():
     params = {"$limit": 50000, "$order": "date ASC"}
     res = requests.get(FORECLOSURE_API_URL, params=params, timeout=30)
@@ -352,25 +352,33 @@ def fetch_foreclosures():
 
 
 def find_foreclosure_county_column(df, county):
-    clean_target_options = [
-        county.lower().replace(" ", "_").replace(".", "").replace("'", "").replace("-", "_"),
-        f"{county.lower()}_county".replace(" ", "_").replace(".", "").replace("'", "").replace("-", "_"),
-        county.lower().replace(" ", "").replace(".", "").replace("'", "").replace("-", "")
+    clean_county = (
+        county.lower()
+        .replace(" ", "_")
+        .replace(".", "")
+        .replace("'", "")
+        .replace("-", "_")
+    )
+
+    possible = [
+        clean_county,
+        clean_county.replace("_city", ""),
+        f"{clean_county}_county"
     ]
 
     if county == "Baltimore City":
-        clean_target_options += ["baltimore_city", "baltimorecity"]
+        possible += ["baltimore_city", "baltimorecity"]
 
     for col in df.columns:
-        clean_col = col.lower().replace(".", "").replace("'", "").replace("-", "_")
+        clean_col = (
+            col.lower()
+            .replace(" ", "_")
+            .replace(".", "")
+            .replace("'", "")
+            .replace("-", "_")
+        )
 
-        if clean_col in clean_target_options:
-            return col
-
-    for col in df.columns:
-        clean_col = col.lower().replace(".", "").replace("'", "").replace("-", "_")
-
-        if county.lower().replace("'", "").replace(".", "") in clean_col.replace("_", " "):
+        if clean_col in possible:
             return col
 
     raise ValueError(f"Could not find foreclosure column for {county}")
@@ -382,16 +390,18 @@ def county_foreclosure_chart(county, metric):
 
     df[county_col] = pd.to_numeric(df[county_col], errors="coerce").fillna(0)
 
-    # Match foreclosure type flexibly
     metric_clean = metric.lower().strip()
 
     if metric_clean == "notice of intent":
         df_m = df[df["type"].str.lower().str.contains("intent", na=False)]
+
     elif metric_clean == "notice of foreclosure":
         df_m = df[df["type"].str.lower().str.contains("foreclosure", na=False)]
         df_m = df_m[~df_m["type"].str.lower().str.contains("property", na=False)]
+
     elif metric_clean == "foreclosure property registration":
         df_m = df[df["type"].str.lower().str.contains("property", na=False)]
+
     else:
         df_m = df[df["type"].str.lower() == metric_clean]
 
@@ -426,9 +436,9 @@ def county_foreclosure_chart(county, metric):
 # -------------------------
 # CHART HELPERS
 # -------------------------
-
 def line_chart(title, df, y_title):
     fig = go.Figure()
+
     fig.add_trace(go.Scatter(
         x=df["date"],
         y=df["value"],
@@ -452,6 +462,7 @@ def line_chart(title, df, y_title):
 
 def bar_chart(title, df, y_title):
     fig = go.Figure()
+
     fig.add_trace(go.Bar(
         x=df["date"],
         y=df["value"],
@@ -473,6 +484,7 @@ def bar_chart(title, df, y_title):
 
 def unemployment_claims_chart(df):
     fig = go.Figure()
+
     fig.add_trace(go.Scatter(
         x=df["date"],
         y=df["value"],
@@ -521,42 +533,17 @@ def foreclosure_chart():
 
 def empty_chart(message="Select an indicator"):
     fig = go.Figure()
-    fig.update_layout(
-        title=message,
-        template="plotly_white",
-        height=500
-    )
+    fig.update_layout(title=message, template="plotly_white", height=500)
     return fig
 
 
+# -------------------------
+# COUNTY CHARTS
+# -------------------------
 def county_location_name(county):
     if county == "Baltimore City":
         return "Baltimore city, MD"
-
     return f"{county} County, MD"
-
-def get_county_economic_fred_titles(county, metric):
-    place = county_location_name(county)
-
-    if metric == "Resident Population":
-        return [
-            f"Resident Population in {place}",
-            f"Population Estimate, Total for {place}"
-        ]
-
-    if metric == "Median Household Income":
-        return [
-            f"Estimate of Median Household Income for {place}",
-            f"Median Household Income in {place}"
-        ]
-
-    if metric == "Poverty Rate":
-        return [
-            f"Estimated Percent of People of All Ages in Poverty for {place}",
-            f"Percent of Population Below the Poverty Level in {place}"
-        ]
-
-    return []
 
 
 def get_county_fred_title(county, section, metric):
@@ -595,15 +582,8 @@ def get_county_chart(county, section, metric):
             return line_chart(f"{county} County — {metric}", df, "Count")
 
         if section == "Economic":
-            df = fetch_county_census_economic(county, metric)
-
-            if metric == "Poverty Rate":
-                return line_chart(f"{county} County — {metric}", df, "Percent")
-
-            if metric == "Median Household Income":
-                return line_chart(f"{county} County — {metric}", df, "Dollars")
-
-            return line_chart(f"{county} County — {metric}", df, "Persons")
+            df, y_label = fetch_county_saipe(county, metric)
+            return line_chart(f"{county} County — {metric}", df, y_label)
 
         if section == "Foreclosures":
             return county_foreclosure_chart(county, metric)
@@ -682,7 +662,6 @@ def get_real_chart(category, subcategory):
 # -------------------------
 # UI HELPERS
 # -------------------------
-
 def category_button(label, category, selected=False):
     return html.Button(
         label,
@@ -790,7 +769,6 @@ def map_placeholder(title="Interactive Map of Maryland Counties"):
 # -------------------------
 # LAYOUT
 # -------------------------
-
 app.layout = html.Div([
     dcc.Store(id="selected-category", data=None),
     dcc.Store(id="selected-subcategory", data=None),
@@ -849,9 +827,8 @@ app.layout = html.Div([
 
 
 # -------------------------
-# RENDER PAGES
+# RENDER PAGE
 # -------------------------
-
 @app.callback(
     Output("page-content", "children"),
     Input("selected-category", "data"),
@@ -1017,6 +994,17 @@ def render_page(category, subcategory, county, county_section, county_metric):
                     html.Div([
                         html.H5(f"{section.upper()} STATISTICS"),
 
+                        html.Div(
+                            "Note: County-level economic data is intentionally delayed due to official Census (SAIPE) release schedules.",
+                            style={
+                                "color": "#666",
+                                "fontSize": "12px",
+                                "marginBottom": "12px",
+                                "fontStyle": "italic",
+                                "display": "block" if section == "Economic" else "none"
+                            }
+                        ),
+
                         html.Button(
                             "Choose Different County",
                             id={"type": "clear-county-btn", "name": "clear"},
@@ -1128,7 +1116,6 @@ def render_page(category, subcategory, county, county_section, county_metric):
 # -------------------------
 # CALLBACKS
 # -------------------------
-
 @app.callback(
     Output("selected-category", "data"),
     Output("selected-subcategory", "data", allow_duplicate=True),
@@ -1143,7 +1130,6 @@ def update_category(category_clicks, back_clicks):
     triggered = ctx.triggered_id
     triggered_value = ctx.triggered[0]["value"]
 
-    # Ignore fake triggers from Dash rebuilding layout
     if triggered_value in [None, 0, []]:
         return no_update, no_update, no_update, no_update, no_update
 
@@ -1162,7 +1148,9 @@ def update_category(category_clicks, back_clicks):
     prevent_initial_call=True
 )
 def update_subcategory(sub_clicks):
-    if not sub_clicks or max(sub_clicks) == 0:
+    triggered_value = ctx.triggered[0]["value"]
+
+    if triggered_value in [None, 0, []]:
         return no_update
 
     if isinstance(ctx.triggered_id, dict):
@@ -1183,7 +1171,6 @@ def update_county(county_clicks, clear_clicks):
     triggered = ctx.triggered_id
     triggered_value = ctx.triggered[0]["value"]
 
-    # Ignore fake triggers from layout refresh
     if triggered_value in [None, 0, []]:
         return no_update, no_update, no_update
 
@@ -1203,11 +1190,14 @@ def update_county(county_clicks, clear_clicks):
     prevent_initial_call=True
 )
 def update_county_section(section_clicks):
-    if not section_clicks or max(section_clicks) == 0:
+    triggered = ctx.triggered_id
+    triggered_value = ctx.triggered[0]["value"]
+
+    if triggered_value in [None, 0, []]:
         return no_update, no_update
 
-    if isinstance(ctx.triggered_id, dict):
-        label = ctx.triggered_id["name"]
+    if isinstance(triggered, dict):
+        label = triggered["name"]
 
         if "Labor" in label:
             return "Labor", None
@@ -1230,7 +1220,9 @@ def update_county_section(section_clicks):
     prevent_initial_call=True
 )
 def update_county_metric(metric_clicks):
-    if not metric_clicks or max(metric_clicks) == 0:
+    triggered_value = ctx.triggered[0]["value"]
+
+    if triggered_value in [None, 0, []]:
         return no_update
 
     if isinstance(ctx.triggered_id, dict):
