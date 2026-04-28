@@ -1,0 +1,13 @@
+.git/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite
+*.ipynb
+*.twbx
+Individual Reflection.xlsx
+README.md
+Local/maryland_econ_dashboard/Backup_Route/
