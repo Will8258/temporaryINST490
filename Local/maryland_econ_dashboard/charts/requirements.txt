@@ -2,30 +2,4 @@ dash
 plotly
 pandas
 requests
-gunicorn# Core data
-pandas
-requests
-pyyaml
-openpyxl
-
-# FRED API
-fredapi
-
-# Dashboard
-dash
-plotly
-
-# CLI output (used in bls_api.py)
-prettytable
-
-# --- New packages for Render deployment ---
-
-# Serves the Dash app on Render (replaces the built-in dev server)
 gunicorn
-
-# Caches API responses in memory so data refreshes automatically every 30 days
-flask-caching
-
-# Loads API keys from a local .env file during development
-# Not needed on Render — Render injects env vars directly
-python-dotenv
