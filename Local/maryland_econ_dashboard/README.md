@@ -197,9 +197,9 @@ If any package is missing, Render may fail during deployment.
 
 API keys should be stored as environment variables.
 
-    export FRED_API_KEY=your_fred_key
-    export BLS_API_KEY=your_bls_key
-    export CENSUS_API_KEY=your_census_key
+    FRED_API_KEY = os.getenv("FRED_API_KEY", "YOUR_FRED_KEY")
+    BLS_API_KEY = os.getenv("BLS_API_KEY", "YOUR_BLS_KEY")
+    CENSUS_API_KEY = os.getenv("CENSUS_API_KEY", "")
 
 The Census SAIPE API can often work without a key, but a valid key may help avoid request limits.
 
